@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeOperators #-}
 module Data.Lisp (Number(..), SourceRange(..), Lisp(..), parseLisp,
                   parseLispFile, parseLispExpr, showLispPos, CharParser,
                   lispParser, KeepSymbolCasing(..)) where
