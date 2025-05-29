@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
 module Data.Lisp (Number(..), SourceRange(..), Lisp(..), parseLisp,
                   parseLispFile, parseLispExpr, showLispPos, CharParser,
                   lispParser) where
+
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Text(Text)
@@ -31,7 +34,7 @@ replaceChar from to (c:cs)
   | otherwise = c:replaceChar from to cs
 
 specialChars :: String
-specialChars = "()#\"\\,'`| ;" 
+specialChars = "()#\"\\,'`| ;"
 
 instance Show Number where
   show (Integer i) = show i
@@ -70,7 +73,7 @@ instance Show Lisp where
     | Text.null s = "||"
     | Text.any (`elem` specialChars) s = '|': Text.unpack s ++ "|"
     | otherwise = Text.unpack s
-    
+
   show (LispVector l _) =
     "#(" ++ unwords (map show l) ++ ")"
   show (LispList l _) = "(" ++ unwords (map show l) ++ ")"
@@ -106,12 +109,12 @@ type CharParser t a = (Stream t, Token t ~ Char)
                     => Parsec Void t a
 
 -- | A megaparsec parser for lisp expressions
-lispParser :: CharParser t Lisp
+lispParser :: TraversableStream t => CharParser t Lisp
 lispParser = withSourceRange lispExprP
 
 -- | Parse a lisp file
 parseLispFile :: String -> IO (Either (ParseErrorBundle Text Void) [Lisp])
-parseLispFile file = 
+parseLispFile file =
   runParser (many lispParser <* whiteSpace <* eof) file
   <$> Text.readFile file
 
@@ -128,7 +131,7 @@ parseLispExpr = runParser lispParser
 signP :: CharParser t String
 signP = option "" $ ("" <$ char '+') <|> ("-" <$ char '-')
 
-withSourceRange :: CharParser t (SourceRange -> a) -> CharParser t a
+withSourceRange :: TraversableStream t => CharParser t (SourceRange -> a) -> CharParser t a
 withSourceRange p = do
   startRange <- getSourcePos
   mkParser <- p
@@ -161,7 +164,7 @@ numP = label "number" $ do
         pure $ LispNumber $ NumRatio $ read (sign++d) % read denom
 
       floatP :: String -> CharParser t (SourceRange -> Lisp)
-      floatP d = 
+      floatP d =
         exptP sign d "0"
         <|> do _ <- char '.'
                exptP sign d "0" <|> do
@@ -176,7 +179,7 @@ numP = label "number" $ do
           pure (LispNumber $ DoubleFloat $ read $ sign++"0." ++ fract)
 
   (numNumP <|> try dotNumP) <* notFollowedBy identifierBlocksP
-  
+
 exptP :: String -> String -> String -> CharParser t (SourceRange -> Lisp)
 exptP sign num fract = do
   -- e would be context dependend, but I am defaulting it to Double here
@@ -194,7 +197,7 @@ quoteAnyChar = char '\\' >> anySingle
 
 stringP :: CharParser t (SourceRange -> Lisp)
 stringP =
-  label "string" $ do 
+  label "string" $ do
   str <- between (char '"') (char '"') $
          Text.pack <$> many (quoteAnyChar <|> noneOf ("\\\"" :: String))
   pure $ LispString str
@@ -212,7 +215,7 @@ identifierP =
 
         moreBlocksP :: CharParser t String
         moreBlocksP = concat <$> many (some blockCharP <|> quotedBlockP)
-        
+
 quotedBlockP :: CharParser t String
 quotedBlockP = between (char '|') (char '|') $
                many (noneOf ("|\\" :: String) <|> quoteAnyChar)
@@ -222,11 +225,11 @@ notSpecial = toUpper <$> noneOf specialChars
 
 blockCharP :: CharParser t Char
 blockCharP = notSpecial <|> char '#' <|> char '`' <|> quoteAnyChar
-          
+
 identifierBlocksP :: CharParser t String
 identifierBlocksP = concat <$> some (some blockCharP <|> quotedBlockP)
 
-lispExprP :: CharParser t (SourceRange -> Lisp)
+lispExprP :: TraversableStream t => CharParser t (SourceRange -> Lisp)
 lispExprP = choice [ stringP
                    , listP
                    , try numP
@@ -235,12 +238,12 @@ lispExprP = choice [ stringP
                    , readersP
                    ]
 
-listP :: CharParser t (SourceRange -> Lisp)
+listP :: TraversableStream t => CharParser t (SourceRange -> Lisp)
 listP =
   label "list" $
   between (char '(') (char ')') $ do
   elems <- lispParser `sepEndBy` whiteSpace
-  dotElem <- optional $ 
+  dotElem <- optional $
     char '.' *> whiteSpace *>
     lispParser <* whiteSpace
   pure $ case dotElem of
@@ -266,7 +269,7 @@ quoteSymbol symbol quoteExpansion  = do
     LispSymbol quoteExpansion $ SourceRange from $
     from {sourceColumn = mkPos $ length symbol + unPos (sourceColumn from)}
 
-quoteP :: CharParser t (SourceRange -> Lisp)
+quoteP :: TraversableStream t => CharParser t (SourceRange -> Lisp)
 quoteP = do
   quote <- (quoteSymbol "'" "quote" <|>
             try (quoteSymbol ",@" "unquote-splicing") <|>
@@ -275,16 +278,16 @@ quoteP = do
            <* whiteSpace
   expr <- lispParser
   pure $ \range -> LispList [quote range, expr] range
-  
-readersP :: CharParser t (SourceRange -> Lisp)
+
+readersP :: TraversableStream t => CharParser t (SourceRange -> Lisp)
 readersP = do
   _ <- char '#'
   (vectorReaderP <|> complexReaderP) <|>
     (octalReaderP <|> hexReaderP <|> binaryReaderP)
     <* notFollowedBy identifierBlocksP
 
-vectorReaderP :: CharParser t (SourceRange -> Lisp)
-vectorReaderP = 
+vectorReaderP :: TraversableStream t => CharParser t (SourceRange -> Lisp)
+vectorReaderP =
   between (char '(') (char ')') $
   LispVector <$> (lispParser `sepEndBy` whiteSpace)
 
