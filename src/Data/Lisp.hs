@@ -4,28 +4,29 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Data.Lisp (Number(..), SourceRange(..), Lisp(..), parseLisp,
-                  parseLispFile, parseLispExpr, showLispPos, CharParser,
-                  lispParser) where
+module Data.Lisp
+  (Number(..), SourceRange(..), Lisp(..), parseLisp
+  , parseLispFile, parseLispExpr, showLispPos, CharParser
+  , lispParser) where
 
+import Control.Applicative hiding (some, many)
+import Control.Monad
+import Data.Char
+import Data.Complex
+import Data.Ratio
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Data.Text(Text)
-import Control.Applicative hiding (some, many)
-import Data.Ratio
-import Data.Char
-import Control.Monad
-import Data.Complex
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
 
 data Number =
-  Integer Integer |
-  SingleFloat Float |
-  DoubleFloat Double |
-  NumRatio (Ratio Integer) |
-  ComplexDouble (Complex Double)
+  Integer Integer
+  | SingleFloat Float
+  | DoubleFloat Double
+  | NumRatio (Ratio Integer)
+  | ComplexDouble (Complex Double)
 
 replaceChar :: Char -> Char -> String -> String
 replaceChar _ _ [] = []
@@ -59,12 +60,12 @@ instance Show SourceRange where
             show (unPos l) ++ ":" ++ show (unPos c)
 
 data Lisp =
-  LispString Text SourceRange |
-  LispNumber Number SourceRange |
-  LispSymbol Text SourceRange |
-  LispVector [Lisp] SourceRange |
-  LispList [Lisp] SourceRange |
-  LispDotList [Lisp] Lisp SourceRange
+  LispString Text SourceRange
+  | LispNumber Number SourceRange
+  | LispSymbol Text SourceRange
+  | LispVector [Lisp] SourceRange
+  | LispList [Lisp] SourceRange
+  | LispDotList [Lisp] Lisp SourceRange
 
 instance Show Lisp where
   show (LispString t _) = show t
